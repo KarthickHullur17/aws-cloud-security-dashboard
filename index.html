@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AWS Cloud Threat Monitoring — Dashboard</title>
+
+  <!-- Font + Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/6f1b2d9a7b.js" crossorigin="anonymous"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --bg:#0f1724;    /* dark navy */
+      --panel:#0b1220; /* panel bg */
+      --muted:#9aa8b2;
+      --accent:#ff9900; /* AWS-like orange */
+      --glass: rgba(255,255,255,0.03);
+      --card-border: rgba(255,255,255,0.06);
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    body{
+      background: linear-gradient(180deg,#081021 0%, #0f1724 60%);
+      color:#e6eef5;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* Topbar */
+    .topbar{
+      height:72px;
+      display:flex;
+      align-items:center;
+      padding:0 28px;
+      gap:20px;
+      border-bottom:1px solid rgba(255,255,255,0.03);
+      background: linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      position:sticky; top:0; z-index:40;
+    }
+    .brand {
+      display:flex; align-items:center; gap:12px;
+    }
+    .logo {
+      width:46px; height:46px; border-radius:8px;
+      background: linear-gradient(135deg,#ff9900,#ffb84d);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 6px 18px rgba(255,153,0,0.12);
+      font-weight:700; color:#04212a;
+    }
+    .brand h1{font-size:18px; margin:0; letter-spacing:0.6px;}
+    .brand p{margin:0;font-size:12px;color:var(--muted)}
+
+    .top-actions { margin-left:auto; display:flex; gap:12px; align-items:center; }
+
+    .search {
+      background:var(--panel); border:1px solid var(--card-border);
+      padding:8px 12px; border-radius:999px; color:var(--muted); width:320px;
+      display:flex; gap:8px; align-items:center;
+    }
+    .search input{ background:transparent;border:0; outline:none; color:inherit; width:100%; font-size:14px;}
+
+    /* Layout */
+    .layout { display:grid; grid-template-columns:260px 1fr; gap:24px; padding:22px 28px; }
+
+    /* Sidebar */
+    .sidebar{
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      border-radius:12px; padding:18px; height:calc(100vh - 140px);
+      border:1px solid var(--card-border);
+    }
+    .nav-group{ margin-bottom:18px; }
+    .nav-item{
+      display:flex; gap:12px; align-items:center; padding:10px; border-radius:8px; color:var(--muted);
+      font-weight:600; cursor:pointer; margin-bottom:6px;
+    }
+    .nav-item.active{ background: rgba(255,153,0,0.08); color:var(--accent); box-shadow: inset 0 0 0 1px rgba(255,153,0,0.04);}
+
+    /* Main content */
+    .main {
+      min-height: calc(100vh - 140px);
+    }
+    .grid {
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:18px; margin-bottom:18px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px; padding:18px; border:1px solid var(--card-border);
+      box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+    }
+    .stat-title{ font-size:13px; color:var(--muted); margin-bottom:8px;}
+    .stat-value{ font-size:22px; font-weight:700; color:#fff;}
+    .stat-sub{ font-size:12px; color:var(--muted); margin-top:6px;}
+
+    /* Alerts table */
+    .panel {
+      margin-top:12px; padding:14px; border-radius:12px; border:1px solid var(--card-border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    }
+    .panel h2{ margin:0 0 12px 0; font-size:16px;}
+    table{ width:100%; border-collapse:collapse; font-size:14px;}
+    thead th{ text-align:left; color:var(--muted); font-size:12px; padding:8px 6px; border-bottom:1px solid rgba(255,255,255,0.03);}
+    tbody td{ padding:12px 6px; border-bottom:1px dashed rgba(255,255,255,0.02); }
+    .sev-high{ color:var(--danger); font-weight:700;}
+    .sev-med{ color:#f59e0b; font-weight:700;}
+    .sev-low{ color:var(--success); font-weight:700;}
+
+    /* responsive */
+    @media (max-width:1000px){
+      .layout{ grid-template-columns: 1fr; padding:14px; }
+      .grid{ grid-template-columns: 1fr 1fr; }
+      .sidebar{ display:none; }
+    }
+    @media (max-width:600px){
+      .grid{ grid-template-columns: 1fr; }
+      .search{ width:160px; }
+    }
+
+    /* small helpers */
+    .muted{ color:var(--muted); font-size:13px; }
+    .right{ text-align:right; }
+    .pill { padding:6px 10px; border-radius:999px; font-weight:700; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">AWS</div>
+      <div>
+        <h1>AWS Cloud Threat Monitoring</h1>
+        <p>Demo • Security & Compliance • Dashboard</p>
+      </div>
+    </div>
+
+    <div class="search" style="margin-left:18px">
+      <i class="fas fa-search" style="color:var(--muted)"></i>
+      <input id="searchInput" placeholder="Search alerts, services, resources..." />
+    </div>
+
+    <div class="top-actions">
+      <div class="pill"><i class="fas fa-cloud"></i>&nbsp;ap-south-1</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="muted" id="timeNow"></div>
+        <div style="width:44px; height:44px; border-radius:8px; background:#061021; display:flex; align-items:center; justify-content:center; border:1px solid var(--card-border)">
+          <i class="fas fa-user" style="color:var(--muted)"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layout -->
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <div style="font-weight:700">Navigation</div>
+        <div class="muted" style="font-size:12px">v1.0</div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-item active"><i class="fas fa-tachometer-alt" style="width:18px"></i> Dashboard</div>
+        <div class="nav-item"><i class="fas fa-shield-alt" style="width:18px"></i> GuardDuty</div>
+        <div class="nav-item"><i class="fas fa-database" style="width:18px"></i> S3 / Storage</div>
+        <div class="nav-item"><i class="fas fa-user-shield" style="width:18px"></i> IAM</div>
+        <div class="nav-item"><i class="fas fa-cogs" style="width:18px"></i> Config Rules</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="muted">Quick actions</div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px">
+          <button onclick="openConsole()" style="padding:10px; border-radius:8px; border:none; background:linear-gradient(90deg,var(--accent),#ffb84d); color:#061021; font-weight:700; cursor:pointer">Open AWS Console</button>
+          <button onclick="triggerDemoIssue()" style="padding:10px; border-radius:8px; border:1px solid var(--card-border); background:transparent; color:var(--muted); cursor:pointer">Create Demo S3 Issue</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- top stats -->
+      <div class="grid">
+        <div class="card">
+          <div class="stat-title">Active High-Severity</div>
+          <div class="stat-value" id="highCount">—</div>
+          <div class="stat-sub muted">Critical security findings across accounts</div>
+        </div>
+
+        <div class="card">
+          <div class="stat-title">Open Investigations</div>
+          <div class="stat-value" id="investigations">—</div>
+          <div class="stat-sub muted">Incidents requiring review</div>
+        </div>
+
+        <div class="card">
+          <div class="stat-title">Last 24h Findings</div>
+          <div class="stat-value" id="last24">—</div>
+          <div class="stat-sub muted">Total findings in past day</div>
+        </div>
+      </div>
+
+      <!-- charts + alerts -->
+      <div style="display:grid; grid-template-columns: 1fr 440px; gap:18px;">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 style="margin:0">Recent Alerts</h2>
+            <div class="muted">Auto-refresh every 20s</div>
+          </div>
+
+          <div class="panel" id="alertsPanel">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:30%">Resource</th>
+                  <th style="width:35%">Finding</th>
+                  <th style="width:15%">Severity</th>
+                  <th style="width:20%">Time</th>
+                </tr>
+              </thead>
+              <tbody id="alertsTableBody">
+                <!-- rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          <div class="card">
+            <h2 style="margin:0 0 12px 0">Threat Trend (24h)</h2>
+            <canvas id="trendChart" height="200"></canvas>
+          </div>
+
+          <div class="card">
+            <h2 style="margin:0 0 12px 0">Top Services</h2>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between;"><div>S3</div><div class="muted">42%</div></div>
+              <div style="display:flex; justify-content:space-between;"><div>IAM</div><div class="muted">28%</div></div>
+              <div style="display:flex; justify-content:space-between;"><div>DynamoDB</div><div class="muted">10%</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer note / info -->
+      <div style="margin-top:18px; display:flex; gap:12px; align-items:center;">
+        <div class="muted">Demo mode: showing live Security Hub findings if API configured.</div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  // ---------- Configuration ----------
+  const API_URL = "YOUR_API_URL_HERE"; // <-- Replace with your API Gateway endpoint
+  const REFRESH_INTERVAL = 20000; // ms
+
+  // ---------- Utilities ----------
+  function timeNowText(){
+    return new Date().toLocaleString();
+  }
+  function openConsole(){ window.open("https://console.aws.amazon.com/","_blank"); }
+
+  // ---------- Demo fallback data (used if API fails) ----------
+  const demoAlerts = [
+    { resource: "s3://threat-test-bucket-1", title: "S3 bucket public access granted", severity:"HIGH", time:"2025-11-19 11:24" },
+    { resource: "IAM: user/demo-user", title: "IAM user without MFA", severity:"HIGH", time:"2025-11-19 10:02" },
+    { resource: "dynamodb:Patients", title: "PITR disabled on table", severity:"MEDIUM", time:"2025-11-18 22:10" },
+    { resource: "EC2: i-0abc123", title: "Suspicious outbound traffic detected", severity:"LOW", time:"2025-11-18 19:30" }
+  ];
+
+  // ---------- DOM helpers ----------
+  const alertsTableBody = document.getElementById("alertsTableBody");
+  const highCountEl = document.getElementById("highCount");
+  const investigationsEl = document.getElementById("investigations");
+  const last24El = document.getElementById("last24");
+  const timeNowEl = document.getElementById("timeNow");
+
+  // ---------- Chart ----------
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  const trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ["-20h","-16h","-12h","-8h","-4h","Now"],
+      datasets: [{
+        label: 'Findings',
+        data: [2,3,5,4,6,4],
+        borderWidth: 2,
+        pointRadius: 3,
+        fill: true,
+        backgroundColor: 'rgba(255,153,0,0.08)',
+        borderColor: 'rgba(255,153,0,0.95)',
+        tension: 0.35
+      }]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ grid:{ display:false }, ticks:{ color:'#9aa8b2' } },
+        y:{ grid:{ color:'rgba(255,255,255,0.03)' }, ticks:{ color:'#9aa8b2', stepSize:2 } }
+      }
+    }
+  });
+
+  // ---------- Fetch alerts from API (SecurityHub) ----------
+  async function fetchAlerts(){
+    timeNowEl.innerText = timeNowText();
+    // If API_URL is placeholder, use demo
+    if(API_URL === "YOUR_API_URL_HERE"){
+      renderAlerts(demoAlerts);
+      updateStats(demoAlerts);
+      return;
+    }
+
+    try {
+      const resp = await fetch(API_URL, { method:'GET' });
+      if(!resp.ok) throw new Error("API error");
+      const data = await resp.json();
+
+      // Expecting data to be an array of findings (Security Hub)
+      // If SecurityHub format, convert to our simplified shape
+      const simplified = (Array.isArray(data) ? data : []).map(f => {
+        return {
+          resource: (f.Resources && f.Resources[0] && (f.Resources[0].Id || f.Resources[0].Type)) || (f.ProductArn || 'resource'),
+          title: f.Title || f.ProductName || f.Name || (f.Description || 'Alert'),
+          severity: (f.Severity && (f.Severity.Label || f.Severity)) || (f.SeverityLabel || 'LOW'),
+          time: f.CreatedAt || f.UpdatedAt || new Date().toISOString()
+        };
+      });
+
+      if(simplified.length === 0) {
+        renderAlerts([]);
+        updateStats([]);
+      } else {
+        renderAlerts(simplified);
+        updateStats(simplified);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch API — demo mode", err);
+      renderAlerts(demoAlerts);
+      updateStats(demoAlerts);
+    }
+  }
+
+  function renderAlerts(list){
+    alertsTableBody.innerHTML = "";
+    if(!list || list.length === 0){
+      alertsTableBody.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:18px; color:var(--muted)'>No active alerts — all clear ✔️</td></tr>";
+      return;
+    }
+
+    list.forEach(item => {
+      const sevClass = (item.severity || '').toUpperCase().includes('HIGH') ? 'sev-high' :
+                       (item.severity || '').toUpperCase().includes('MED') ? 'sev-med' : 'sev-low';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="min-width:170px"><div style="font-weight:700">${escapeHtml(item.resource)}</div></td>
+        <td><div style="max-width:420px; color:#cfe8ff">${escapeHtml(item.title)}</div></td>
+        <td class="${sevClass}">${escapeHtml(item.severity)}</td>
+        <td class="muted">${escapeHtml(item.time)}</td>
+      `;
+      alertsTableBody.appendChild(tr);
+    });
+  }
+
+  function updateStats(list){
+    const high = list.filter(x => (x.severity||'').toUpperCase().includes('HIGH')).length;
+    highCountEl.innerText = high || 0;
+    investigationsEl.innerText = Math.min(5, high + 1);
+    last24El.innerText = list.length;
+  }
+
+  function escapeHtml(text){
+    if(!text) return '';
+    return String(text).replace(/[&<>"'`=\/]/g, function(s){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#96;','=':'&#61;'})[s]; });
+  }
+
+  // ---------- Actions ----------
+  function triggerDemoIssue(){
+    // For demo only — in real project you'd call a backend lambda to create S3 public bucket or so
+    alert("Demo action: create S3 public bucket (not implemented). For real demo, use AWS Console or script.");
+  }
+
+  // ---------- Auto refresh ----------
+  fetchAlerts();
+  setInterval(fetchAlerts, REFRESH_INTERVAL);
+
+  // ---------- Search filter ----------
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    const rows = [...alertsTableBody.querySelectorAll('tr')];
+    rows.forEach(r => {
+      const txt = r.innerText.toLowerCase();
+      r.style.display = txt.includes(q) ? '' : 'none';
+    });
+  });
+</script>
+
+</body>
+</html>
